@@ -8,8 +8,7 @@ import string
 # from deepgram import run_deepgram_model
 
 
-DIRPATH = "/Users/annas.kiefer/Desktop/transcribe"
-FILEPATH = f"{DIRPATH}/DD_transcripts_serota.csv"
+
 
 
 # nlp = spacy.load('en_core_web_lg')
@@ -19,19 +18,19 @@ FILEPATH = f"{DIRPATH}/DD_transcripts_serota.csv"
 # 7f5uDPxTBXo https://www.assemblyai.com/playground/transcript/rj9268sd9s-cb9d-4102-9fe2-ff2ed2d4c300
 
 
-def pipeline():
-	with open(FILEPATH) as f:
-		reader = csv.DictReader(f)
-		for row in reader:
-			video_link = row["Link to video"]
-			full_video_link = video_link.split("#t=")[0]
-			video_id = os.path.basename(video_link).split(".mp4")[0]
+# def pipeline():
+# 	with open(FILEPATH) as f:
+# 		reader = csv.DictReader(f)
+# 		for row in reader:
+# 			video_link = row["Link to video"]
+# 			full_video_link = video_link.split("#t=")[0]
+# 			video_id = os.path.basename(video_link).split(".mp4")[0]
 
-			# assemblyai_file = f"{DIRPATH}/assembly/{vid_id}_assembly.txt"
-			# deepgram_file = f"{DIRPATH}/deepgram/{vid_id}_deepgram.txt"
+# 			# assemblyai_file = f"{DIRPATH}/assembly/{vid_id}_assembly.txt"
+# 			# deepgram_file = f"{DIRPATH}/deepgram/{vid_id}_deepgram.txt"
 			
-			run_assemblyai_model(full_video_link, video_id, assemblyai_file)
-			# run_deepgram_model(full_video_link, video_id, deepgram_file)
+# 			run_assemblyai_model(full_video_link, video_id, assemblyai_file)
+# 			# run_deepgram_model(full_video_link, video_id, deepgram_file)
 
 
 def main():

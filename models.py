@@ -5,8 +5,14 @@ import utils
 import csv
 import pandas as pd
 import datetime
+import asyncio
+import re
 
 from common import get_texts, CSV_FILEPATH
+from deepgram import Deepgram
+from typing import List, Dict
+
+# from deepgram_model import deepgram_model
 
 
 NUM_VIDEOS = 20
@@ -14,10 +20,44 @@ DIRPATH = "/Users/annas.kiefer/Desktop/transcribe"
 FILEPATH = f"{DIRPATH}/DD_transcripts_serota.csv"
 
 
-def run_deepgram_model(video_filepath: str, video_id: str, start_time: int, end_time: int):
+async def run_deepgram_model(video_filepath: str, video_id: str, start_time: int, end_time: int):
 
     filepath_out = f"{DIRPATH}/deepgram/{video_id}_deepgram.txt"
 
+    # deepgram_model(video_filepath, video_id, start_time, end_time)
+
+    api_key = os.getenv("DEEPGRAM_API_KEY")
+    if api_key is None:
+        raise RuntimeError("DEEPGRAM_API_KEY environment variable not set. Try setting it now, or passing in your "
+                           "API key as a command line argument with `--api_key`.")
+
+    dg_client = Deepgram(api_key)
+
+    source = {"url": video_filepath}
+    start_run_time = time.time()
+    response = await dg_client.transcription.prerecorded(source, {'punctuate': True})
+
+    sentences = []
+    text = ""
+    word_list = response['results']['channels'][0]['alternatives'][0]['words']
+    for word_dict in word_list:
+        start = word_dict['start']
+        end = word_dict['end']
+        word = word_dict['punctuated_word']
+        word += " "  # add a space
+        if start >= start_time:
+            text += word
+        elif end >= end_time:
+            break
+
+    end_run_time = time.time()
+
+    print(f"{video_id} Transcription time: {(end_run_time - start_run_time)}")
+
+    # Save and print transcript
+    with open(filepath_out, 'w') as f:
+        f.write(text)
+        f.close()
 
 def run_assemblyai_model(video_filepath: str, video_id: str, start_time: int, end_time: int):
 
@@ -38,6 +78,11 @@ def run_assemblyai_model(video_filepath: str, video_id: str, start_time: int, en
     # upload_url = utils.upload_file(video_filepath, header)
 
     start_run_time = time.time()
+
+    # convert start time and end time from s to ms
+    start_time *= 1000
+    end_time *= 1000
+
     # Request a transcription
     transcript_response = utils.request_transcript(video_filepath, header, start_time, end_time)
 
@@ -62,6 +107,44 @@ def run_assemblyai_model(video_filepath: str, video_id: str, start_time: int, en
 
     return
 
+def get_texts():
+    texts = {}
+    
+    with open(CSV_FILEPATH) as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+
+            hearing_date = row["Hearing date"]
+            if hearing_date[-2:] == "18":  # only get videos from 2018 hearing
+                video_link = row["Link to video"]
+                full_video_link = video_link.split("t")
+                video_id = os.path.basename(video_link).split(".mp4")[0]
+                utterance = row["Utterance"]
+
+                # add space after each sentence if it ends with "."
+                utterance += " "
+                utterance = utterance.strip()
+                if utterance and utterance[-1] == ".":
+                    utterance += " "
+                if video_id in texts:
+                    texts[video_id] += utterance
+                else:
+                    texts[video_id] = utterance
+    return texts
+
+
+def save_groundtruth(texts: Dict, vid_id: str):
+
+    for video_id, text in texts.items():
+        if video_id == vid_id:
+            groundtruth_file = f"{DIRPATH}/groundtruth/{vid_id}_truth.txt"
+            # add space after any punctuation
+            re.sub(r'\.(?!\s|\d|$)', '. ', text)
+            # save the groundtruth data to open later
+            with open(groundtruth_file, "w") as f:
+                f.write(text)
+                f.close()
+
 
 def sort_videos(videos):
     videos_with_full_time = []
@@ -76,13 +159,11 @@ def sort_videos(videos):
     vids = sorted(videos_with_full_time, key=lambda x: x["full_time"], reverse=True)
     return vids
 
-def main():
+async def main():
 
     with open(CSV_FILEPATH) as f:
         reader = csv.DictReader(f)
-
         videos = {}
-
         for row in reader:
             hearing_date = row["Hearing date"]
 
@@ -99,20 +180,22 @@ def main():
         videos = sort_videos(videos)
 
         video_count = 0
-        for info in videos:
+        
+        texts = get_texts()
+
+        for info in videos:  # change me
             if video_count <= NUM_VIDEOS:
                 vid_link = info["video_link"]
-                # convert end_time from s to ms
-                vid_start_time = info["start_time"] * 1000
-                vid_end_time = info["end_time"] * 1000
+                vid_start_time = info["start_time"]
+                vid_end_time = info["end_time"]
                 vid_id = info["video_id"]
                 full_time = info["full_time"]
-                run_deepgram_model(vid_link, vid_id, vid_start_time, vid_end_time)
+                # comment in/out these lines to test the different models, or run all 3
+                save_groundtruth(texts, vid_id)
+                # await run_deepgram_model(vid_link, vid_id, vid_start_time, vid_end_time)
                 # run_assemblyai_model(vid_link, vid_id, vid_start_time, vid_end_time)
                 video_count += 1
-        #         break
 
 if __name__ == '__main__':
-    main()
-
+    asyncio.run(main())
 
